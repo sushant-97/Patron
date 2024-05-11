@@ -22,7 +22,7 @@ import os
 import matplotlib 
 import matplotlib.pyplot as plt
 matplotlib.use("agg")
-
+import time
 
 def patron(unlabel_value, unlabeled_feat, n_sample, k = 50, rho = 0.1, beta = 0.1, mu = 0.1, gamma = 0.5, refine_round = 3, prop = True):
     '''
@@ -88,9 +88,9 @@ def patron(unlabel_value, unlabeled_feat, n_sample, k = 50, rho = 0.1, beta = 0.
 ''' loading embedding and predictions '''
 def load_data(dataset = 'IMDB', embedding_model = 'roberta-base', template_id = 0):
     path = f'{dataset}/'
-    with open(path + f'embedding_{embedding_model}_roberta.pkl', 'rb') as f:
+    with open(path + f'embedding_simcse_unsup-simcse-roberta-base_unlabeled.pkl', 'rb') as f:
         train_emb = pickle.load(f)    
-    train_prompt_pred = np.load(path + f"pred_unlabeled_roberta-base_temp{template_id}.npy")
+    train_prompt_pred = np.load(path + f"pred_unlabeled_roberta-base.npy")
     # train_label = np.load(path + "pred_labels.npy") # actually unused
 
     # assert len(test_label) == test_emb.shape[0]
@@ -187,6 +187,8 @@ def get_arguments():
 
 
 if __name__ == '__main__':
+    # Measure start time
+    start_time = time.time()
     '''
     Suppose all the data is in the folder ./X, where X = {AGNews, IMDB, TREC, Yahoo, Yelp-full}
     '''
@@ -214,4 +216,8 @@ if __name__ == '__main__':
     for round, sample_idx in enumerate(sample_idxs):
         with open(f"{args.dataset}/train_idx_roberta-base_round{round}_rho{args.rho}_gamma{gamma}_beta{beta}_mu{mu}_{n_sample}.json", 'w') as f:
             json.dump(sample_idx, f)
-            
+    
+    # Measure end time
+    end_time = time.time()
+    run_time = end_time - start_time
+    print(f"Total run time {n_sample}: {run_time} seconds")
