@@ -20,7 +20,9 @@ try:
 except ImportError:
     from tensorboardX import SummaryWriter
 from collections import Counter
+import wandb
 
+wandb.login(key="77062fa429965f5024a5c5610a89ea815079ebc9")
 logger = logging.getLogger(__name__)
 
 
@@ -51,6 +53,7 @@ class Trainer(object):
         self.unlabeled = unlabeled
         self.contra_datasets = contra_datasets
         self.data_size = data_size
+        
 
         self.num_labels = num_labels
         self.config_class = AutoConfig.from_pretrained(args.model_name_or_path, num_labels=self.num_labels)
@@ -96,9 +99,16 @@ class Trainer(object):
 
    
     def train(self, n_sample = 20):
+        run_name = self.args.cache_dir[:-6].split("/")
+        run_name = "_".join(run_name) + self.args.trial_
+        print(run_name)
+        wandb.init(project=f"Text-Classification-{self.args.task}", config=self.args, name=run_name)
+        wandb.watch(self.model)
+
         train_sampler = RandomSampler(self.train_dataset)
         train_dataloader = DataLoader(self.train_dataset, sampler=train_sampler, batch_size=self.args.batch_size)
-        
+
+
         no_decay = ['bias', 'LayerNorm.weight']
         optimizer_grouped_parameters = [
             {'params': [p for n, p in self.model.named_parameters() if not any(nd in n for nd in no_decay)],
@@ -109,7 +119,7 @@ class Trainer(object):
         training_steps = max(self.args.max_steps, int(self.args.num_train_epochs) * len(train_dataloader))
 
         # Train!
-        logger.info("***** Running training *****")
+        logger.info("***** Running training for ***** %s", run_name)
         logger.info("  Num examples = %d", len(self.train_dataset))
         logger.info("  Num Epochs = %d", self.args.num_train_epochs)
         logger.info("  Total train batch size = %d", self.args.batch_size)
@@ -121,7 +131,7 @@ class Trainer(object):
         self.model.zero_grad()
 
         train_iterator = trange(int(self.args.num_train_epochs), desc="Epoch")
-        best_dev = -np.float('inf')
+        best_dev = -np.float64('inf')
         for _ in train_iterator:
             epoch_iterator = tqdm(train_dataloader, desc="Iteration")
             local_step = 0
@@ -155,6 +165,7 @@ class Trainer(object):
                     epoch_iterator.set_description("iteration:%d, Loss:%.3f, best dev:%.3f" % (_, tr_loss/global_step, 100*best_dev))
                     if local_step in [training_len//2]: 
                         loss_dev, acc_dev, f1_dev = self.evaluate('dev', global_step)
+                        
                         if acc_dev > best_dev:
                             logger.info("Best model updated!")
                             self.best_model = copy.deepcopy(self.model.state_dict())
@@ -164,14 +175,20 @@ class Trainer(object):
                     epoch_iterator.close()
                     break
             loss_dev, acc_dev, f1_dev = self.evaluate('dev', global_step)
+            wandb.log({"dev_loss": loss_dev, "dev_acc": acc_dev, "dev_f1": f1_dev, "global_step": global_step})
+            
             if acc_dev > best_dev:
                 logger.info("Best model updated!")
                 self.best_model = copy.deepcopy(self.model.state_dict())
                 best_dev = acc_dev
-            print(f'Dev: Loss: {loss_dev}, Acc: {acc_dev}, F1: {f1_dev}', f'Test: Loss: {loss_test}, Acc: {acc_test}')
+            print(f'Dev: Loss: {loss_dev}, Acc: {acc_dev}, F1: {f1_dev}')
         result_dict = {'seed': self.args.train_seed, 'labels': self.args.sample_labels}
         self.model.load_state_dict(self.best_model)
         loss_test, acc_test, f1_test = self.evaluate('test', global_step)
+        wandb.log({"loss_test": loss_test, "acc_test": acc_test, "f1_test": f1_test})
+        wandb.finish()
+
+        print(f'Test: Loss: {loss_test}, Acc: {acc_test}')
         result_dict['acc'] = acc_test
         result_dict['f1'] = f1_test
         result_dict['lr'] = self.args.learning_rate
@@ -187,6 +204,9 @@ class Trainer(object):
         with open(f'{self.args.output_dir}_{self.args.model_type}_{self.args.al_method}.json', 'a+') as f:
             f.write(line + '\n')
         self.save_model(stage = n_sample)
+
+        
+
         return global_step, tr_loss / global_step
    
 
@@ -240,11 +260,30 @@ class Trainer(object):
         results = {
             "loss": eval_loss
         }
-        preds = np.argmax(preds, axis=1)
         
+            
+        preds = np.argmax(preds, axis=1)
+
         result = compute_metrics(preds, out_label_ids)
         result.update(result)
         logger.info("***** Eval results *****")
 
-    
+        wandb.log({"eval_loss": results["loss"], "eval_accuracy": result["acc"], "eval_f1": result["f1"], "global_step": global_step})
+        if mode == 'test':
+
+            print(f"**************Saving predictions at: ***************\n")
+            # Open the file in write mode and save the predictions
+            prediction_file = f"{self.args.cache_dir}/prediction.txt"
+            actual_label = f"{self.args.cache_dir}/labels.txt"
+            if not os.path.exists(self.args.cache_dir):
+                os.makedirs(self.args.cache_dir)
+                
+            with open(prediction_file, 'w') as file:
+                for prediction in preds:
+                    file.write(f'{prediction}\n')
+            
+            with open(actual_label, 'w') as file:
+                for prediction in out_label_ids:
+                    file.write(f'{prediction}\n')
+
         return results["loss"], result["acc"], result["f1"]

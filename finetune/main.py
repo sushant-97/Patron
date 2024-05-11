@@ -51,6 +51,11 @@ def main(args):
     trainer.init_model()
     trainer.train(n_sample = len(train_dataset))
 
+    # # Clean up saved model and cache files
+    # if os.path.exists(args.model_dir):
+    #     shutil.rmtree(args.model_dir)
+    # if os.path.exists(args.cache_dir):
+    #     shutil.rmtree(args.cache_dir)
 
 if __name__ == '__main__':
     
@@ -101,8 +106,9 @@ if __name__ == '__main__':
 
     parser.add_argument("--al_method", default='random', type=str, help="The initial learning rate for Adam.")
     parser.add_argument("--sample_labels", default=32, type=int, help="The initial learning rate for Adam.")
-
-
+    parser.add_argument("--if_method", default='r', type=str, help="The initial learning rate for Adam.")
+    parser.add_argument("--trial_", default='r', type=str, help="The initial learning rate for Adam.")
+  
   
 
     args = parser.parse_args()

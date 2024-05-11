@@ -137,7 +137,7 @@ class Processor(object):
         #filename = args.data_dir + '/' + 'config.json'
         #label, num_label, label2id, id2label = self.load_info(filename)
         #self.relation_labels =
-        #self.num_label = num_label
+        self.num_label = 0
         #self.label2id = None
         #self.id2label = None
         if self.args.task in ['agnews']:
@@ -204,11 +204,20 @@ class Processor(object):
         elif mode == 'contrast':
             file_to_read = file_to_read
 
-        logger.info("LOOKING AT {}".format(os.path.join(self.args.data_dir, file_to_read)))
-        if mode == 'contrast':
-            return self._create_examples(self.read_data(os.path.join(self.args.data_dir, file_to_read)), mode)
+        if mode == "unlabeled" or mode == "test":
+            logger.info("LOOKING AT {}".format(os.path.join(self.args.data_dir[:3+len(self.args.task)], file_to_read)))
+            if mode == 'contrast':
+                return self._create_examples(self.read_data(os.path.join(self.args.data_dir[:3+len(self.args.task)], file_to_read)), mode)
+            else:
+                return self._create_examples(self.read_data(os.path.join(self.args.data_dir[:3+len(self.args.task)], file_to_read)), mode)
+        
         else:
-            return self._create_examples(self.read_data(os.path.join(self.args.data_dir, file_to_read)), mode)
+            logger.info("LOOKING AT {}".format(os.path.join(self.args.data_dir, file_to_read)))
+            if mode == 'contrast':
+                return self._create_examples(self.read_data(os.path.join(self.args.data_dir, file_to_read)), mode)
+            else:
+                return self._create_examples(self.read_data(os.path.join(self.args.data_dir, file_to_read)), mode)
+        
 
 def load_and_cache_examples(args, tokenizer, mode, size = -1, contra_name = None):
     processor = Processor(args)
